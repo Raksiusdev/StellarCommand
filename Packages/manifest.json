@@ -4,6 +4,7 @@
     "com.unity.ai.assistant": "2.20.0-pre.2",
     "com.unity.ai.inference": "2.6.1",
     "com.unity.burst": "1.8.17",
+    "com.unity.modules.assetbundle": "1.0.0",
     "com.unity.collections": "2.4.3",
     "com.unity.nuget.newtonsoft-json": "3.2.2",
     "com.unity.render-pipelines.high-definition": "17.0.3",
