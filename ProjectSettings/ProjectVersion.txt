@@ -1,2 +1,2 @@
-m_EditorVersion: 6000.0.47f1
-m_EditorVersionWithRevision: 6000.0.47f1 (some_revision)
+m_EditorVersion: 6000.6.4f1
+m_EditorVersionWithRevision: 6000.6.4f1 (6000.6.4f1)
