@@ -1,0 +1,21 @@
+{
+  "dependencies": {
+    "com.unity.burst": "1.8.17",
+    "com.unity.collections": "2.4.3",
+    "com.unity.inputsystem": "1.11.2",
+    "com.unity.render-pipelines.high-definition": "17.0.3",
+    "com.unity.textmeshpro": "3.0.9",
+    "com.unity.xr.management": "4.5.0",
+    "com.unity.xr.openxr": "1.13.1",
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "scopedRegistries": [
+    {
+      "name": "Meta XR SDK",
+      "url": "https://npm.developer.oculus.com/",
+      "scopes": [
+        "com.meta.xr"
+      ]
+    }
+  ]
+}
