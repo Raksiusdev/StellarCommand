@@ -1,13 +1,15 @@
 {
   "dependencies": {
+    "com.meta.xr.sdk.core": "207.0.0",
+    "com.unity.ai.assistant": "2.20.0-pre.2",
+    "com.unity.ai.inference": "2.6.1",
     "com.unity.burst": "1.8.17",
     "com.unity.collections": "2.4.3",
-    "com.unity.inputsystem": "1.11.2",
+    "com.unity.nuget.newtonsoft-json": "3.2.2",
     "com.unity.render-pipelines.high-definition": "17.0.3",
     "com.unity.textmeshpro": "3.0.9",
-    "com.unity.xr.management": "4.5.0",
-    "com.unity.xr.openxr": "1.13.1",
-    "com.unity.nuget.newtonsoft-json": "3.2.1"
+    "com.unity.xr.management": "4.7.0",
+    "com.unity.xr.openxr": "1.18.0"
   },
   "scopedRegistries": [
     {

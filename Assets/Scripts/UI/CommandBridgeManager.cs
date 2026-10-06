@@ -47,7 +47,7 @@ namespace StellarCommand.UI
         public void ForceReload()
         {
             if (saveLoader != null)
-                saveLoader.LoadSave(saveLoader.FindLatestSave());
+                saveLoader.LoadSave(StellarisSaveLoader.FindLatestSave());
         }
     }
 }
