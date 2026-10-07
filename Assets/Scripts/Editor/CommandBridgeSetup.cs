@@ -87,7 +87,12 @@ namespace StellarCommand.Editor
             return material;
         }
 
-        private static void EnsureBloomVolume()
+        /// <summary>
+        /// Creates/updates the global post-processing volume: bloom for the hologram glow and a
+        /// FIXED exposure. The room and hologram shaders are self-lit, so HDRP's default automatic
+        /// exposure would keep pumping the whole image brighter/darker as the head turns.
+        /// </summary>
+        public static void EnsureBloomVolume()
         {
             EnsureFolder("Assets/Settings");
 
@@ -103,6 +108,22 @@ namespace StellarCommand.Editor
             bloom.intensity.Override(0.25f);
             bloom.threshold.Override(0.9f);
             bloom.scatter.Override(0.65f);
+
+            // The backdrop is our own star sphere: turn off HDRP's daylight sky, clouds and fog.
+            if (!profile.TryGet(out VisualEnvironment environment))
+                environment = profile.Add<VisualEnvironment>(true);
+            environment.skyType.Override(0);   // 0 = none
+            environment.cloudType.Override(0); // 0 = none
+
+            if (!profile.TryGet(out Fog fog))
+                fog = profile.Add<Fog>(true);
+            fog.enabled.Override(false);
+
+            // EV100 = 0 gives a ~1.0 multiplier, so self-lit shader output is shown as authored.
+            if (!profile.TryGet(out Exposure exposure))
+                exposure = profile.Add<Exposure>(true);
+            exposure.mode.Override(ExposureMode.Fixed);
+            exposure.fixedExposure.Override(0f);
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
 
