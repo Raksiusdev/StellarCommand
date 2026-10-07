@@ -51,3 +51,8 @@ crashlytics-build.properties
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+
+# Unity crash-recovery scenes and third-party plugin logs
+/Assets/_Recovery/
+/Assets/_Recovery.meta
+/uWindowCapture.log
