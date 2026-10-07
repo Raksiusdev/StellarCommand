@@ -1,14 +1,26 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.HighDefinition;
+using UnityEngine.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using TMPro;
 using StellarCommand.UI;
-using StellarCommand.SaveParser;
 
 namespace StellarCommand.Editor
 {
     public static class CommandBridgeSetup
     {
+        private const string MaterialPath = "Assets/Materials/HologramPanel.mat";
+        private const string VolumeProfilePath = "Assets/Settings/HologramVolumeProfile.asset";
+
+        private const float PanelWidth = 600f;
+        private const float PanelHeight = 400f;
+
+        private static readonly Color CyanText = new Color(0.55f, 0.95f, 1f);
+        private static readonly Color DimText = new Color(0.45f, 0.7f, 0.8f);
+        private static readonly Color LineColor = new Color(0.25f, 0.9f, 1f, 0.55f);
+
         [MenuItem("StellarCommand/Setup Holographic Panels")]
         public static void SetupHolographicPanels()
         {
@@ -20,8 +32,11 @@ namespace StellarCommand.Editor
                 panelsRoot.transform.position = new Vector3(0, 1.5f, 2f);
             }
 
-            // Create resource panel
-            CreateResourcePanel(panelsRoot.transform);
+            var material = EnsureHologramMaterial();
+            if (material == null) return;
+
+            CreateResourcePanel(panelsRoot.transform, material);
+            EnsureBloomVolume();
 
             // Wire up CommandBridgeManager
             var managerGO = GameObject.Find("Game Manager");
@@ -42,10 +57,76 @@ namespace StellarCommand.Editor
             Debug.Log("[StellarCommand] Holographic panels created. Press Ctrl+S to save.");
         }
 
-        private static void CreateResourcePanel(Transform parent)
+        // ------------------------------------------------------------------ assets
+
+        private static Material EnsureHologramMaterial()
         {
-            // Canvas (World Space)
-            // Recreate from scratch so re-running the menu fixes a broken panel
+            var shader = Shader.Find("StellarCommand/HologramUI");
+            if (shader == null)
+            {
+                Debug.LogError("[StellarCommand] Shader 'StellarCommand/HologramUI' not found. " +
+                               "Check Assets/Shaders/HologramUI.shader for compile errors.");
+                return null;
+            }
+
+            EnsureFolder("Assets/Materials");
+            var material = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
+            if (material == null)
+            {
+                material = new Material(shader);
+                AssetDatabase.CreateAsset(material, MaterialPath);
+            }
+            else
+            {
+                material.shader = shader;
+            }
+
+            material.SetFloat("_Aspect", PanelWidth / PanelHeight);
+            EditorUtility.SetDirty(material);
+            AssetDatabase.SaveAssets();
+            return material;
+        }
+
+        private static void EnsureBloomVolume()
+        {
+            EnsureFolder("Assets/Settings");
+
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(VolumeProfilePath);
+            if (profile == null)
+            {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, VolumeProfilePath);
+            }
+
+            if (!profile.TryGet(out Bloom bloom))
+                bloom = profile.Add<Bloom>(true);
+            bloom.intensity.Override(0.25f);
+            bloom.threshold.Override(0.9f);
+            bloom.scatter.Override(0.65f);
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+
+            var go = GameObject.Find("Hologram Volume");
+            if (go == null) go = new GameObject("Hologram Volume");
+            var volume = go.GetComponent<Volume>();
+            if (volume == null) volume = go.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.sharedProfile = profile;
+            EditorUtility.SetDirty(go);
+        }
+
+        private static void EnsureFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path)) return;
+            int slash = path.LastIndexOf('/');
+            AssetDatabase.CreateFolder(path.Substring(0, slash), path.Substring(slash + 1));
+        }
+
+        // ------------------------------------------------------------------ panel
+
+        private static void CreateResourcePanel(Transform parent, Material hologramMaterial)
+        {
+            // Recreate from scratch so re-running the menu always produces the current look
             var existing = parent.Find("Resource Panel");
             if (existing != null) Object.DestroyImmediate(existing.gameObject);
 
@@ -61,89 +142,107 @@ namespace StellarCommand.Editor
             // so size/scale/pivot must be set AFTER it exists.
             var rectTransform = canvasGO.GetComponent<RectTransform>();
             rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            rectTransform.sizeDelta = new Vector2(600, 400);
+            rectTransform.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             rectTransform.localPosition = Vector3.zero;
             rectTransform.localScale = Vector3.one * 0.002f; // 600px -> 1.2m wide
 
-            canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
-            canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
-
-            // CanvasGroup for alpha control
+            canvasGO.AddComponent<CanvasScaler>();
+            canvasGO.AddComponent<GraphicRaycaster>();
             var canvasGroup = canvasGO.AddComponent<CanvasGroup>();
 
-            // Background panel image
-            var bgGO = new GameObject("Background");
+            // Holographic body: shader draws tint, scanlines, border and corner brackets
+            var bgGO = new GameObject("Background", typeof(RectTransform));
             bgGO.transform.SetParent(canvasGO.transform, false);
-            var bgRect = bgGO.AddComponent<RectTransform>();
+            var bgRect = bgGO.GetComponent<RectTransform>();
             bgRect.anchorMin = Vector2.zero;
             bgRect.anchorMax = Vector2.one;
             bgRect.sizeDelta = Vector2.zero;
-            var bgImage = bgGO.AddComponent<UnityEngine.UI.Image>();
-            bgImage.color = new Color(0.02f, 0.08f, 0.15f, 0.85f); // dark blue hologram bg
+            bgRect.anchoredPosition = Vector2.zero;
+            var bg = bgGO.AddComponent<RawImage>();
+            bg.material = hologramMaterial;
+            bg.raycastTarget = false;
+            bgGO.AddComponent<HologramSurface>();
 
-            // Title
-            var titleGO = CreateTMPLabel(canvasGO.transform, "Title", "EMPIRE RESOURCES",
-                new Vector2(0, 170), new Vector2(560, 40), 28, FontStyles.Bold);
-            titleGO.color = new Color(0.4f, 0.9f, 1f); // cyan
+            // Header
+            var title = CreateLabel(canvasGO.transform, "Title", "EMPIRE RESOURCES",
+                new Vector2(0, 158), new Vector2(520, 36), 26, FontStyles.Bold, TextAlignmentOptions.MidlineLeft, CyanText);
+            title.characterSpacing = 6f;
 
-            // Resource labels
-            float yStart = 110f;
-            float yStep = 40f;
+            var nameLabel = CreateLabel(canvasGO.transform, "NameLabel", "EMPIRE NAME",
+                new Vector2(0, 124), new Vector2(520, 26), 17, FontStyles.Normal, TextAlignmentOptions.MidlineLeft, Color.white);
+            var dateLabel = CreateLabel(canvasGO.transform, "DateLabel", "2200.01.01",
+                new Vector2(0, 124), new Vector2(520, 26), 17, FontStyles.Normal, TextAlignmentOptions.MidlineRight, DimText);
 
-            var energyLabel    = CreateTMPLabel(canvasGO.transform, "EnergyLabel",    "ENERGY       0", new Vector2(0, yStart - yStep * 0), new Vector2(560, 36), 18);
-            var mineralsLabel  = CreateTMPLabel(canvasGO.transform, "MineralsLabel",  "MINERALS     0", new Vector2(0, yStart - yStep * 1), new Vector2(560, 36), 18);
-            var foodLabel      = CreateTMPLabel(canvasGO.transform, "FoodLabel",      "FOOD         0", new Vector2(0, yStart - yStep * 2), new Vector2(560, 36), 18);
-            var alloysLabel    = CreateTMPLabel(canvasGO.transform, "AlloysLabel",    "ALLOYS       0", new Vector2(0, yStart - yStep * 3), new Vector2(560, 36), 18);
-            var goodsLabel     = CreateTMPLabel(canvasGO.transform, "GoodsLabel",     "GOODS        0", new Vector2(0, yStart - yStep * 4), new Vector2(560, 36), 18);
-            var unityLabel     = CreateTMPLabel(canvasGO.transform, "UnityLabel",     "UNITY        0", new Vector2(-160, yStart - yStep * 5), new Vector2(240, 36), 18);
-            var influenceLabel = CreateTMPLabel(canvasGO.transform, "InfluenceLabel", "INFLUENCE    0", new Vector2(160, yStart - yStep * 5), new Vector2(240, 36), 18);
-            var dateLabel      = CreateTMPLabel(canvasGO.transform, "DateLabel",      "2200.01.01",     new Vector2(-160, -170), new Vector2(240, 30), 16);
-            var nameLabel      = CreateTMPLabel(canvasGO.transform, "NameLabel",      "EMPIRE NAME",    new Vector2(160, -170), new Vector2(300, 30), 16);
+            CreateLine(canvasGO.transform, "HeaderLine", 106);
 
-            // Apply hologram green tint to resource labels
-            var holoColor = new Color(0.3f, 1f, 0.6f);
-            energyLabel.color = holoColor;
-            mineralsLabel.color = holoColor;
-            foodLabel.color = holoColor;
-            alloysLabel.color = holoColor;
-            goodsLabel.color = holoColor;
-            unityLabel.color = new Color(0.8f, 0.6f, 1f);    // purple for unity
-            influenceLabel.color = new Color(1f, 0.8f, 0.3f); // gold for influence
-            dateLabel.color = new Color(0.6f, 0.6f, 0.6f);
-            nameLabel.color = new Color(0.9f, 0.9f, 1f);
+            // Resource rows (rich-text tab stops are filled in by ResourcePanel.Refresh)
+            const float rowStart = 78f;
+            const float rowStep = 38f;
+            var energyLabel   = CreateRow(canvasGO.transform, "EnergyLabel",   "ENERGY",   rowStart - rowStep * 0);
+            var mineralsLabel = CreateRow(canvasGO.transform, "MineralsLabel", "MINERALS", rowStart - rowStep * 1);
+            var foodLabel     = CreateRow(canvasGO.transform, "FoodLabel",     "FOOD",     rowStart - rowStep * 2);
+            var alloysLabel   = CreateRow(canvasGO.transform, "AlloysLabel",   "ALLOYS",   rowStart - rowStep * 3);
+            var goodsLabel    = CreateRow(canvasGO.transform, "GoodsLabel",    "GOODS",    rowStart - rowStep * 4);
+
+            CreateLine(canvasGO.transform, "FooterLine", -112);
+
+            var unityLabel = CreateLabel(canvasGO.transform, "UnityLabel", "UNITY",
+                new Vector2(-135, -146), new Vector2(250, 34), 20, FontStyles.Normal, TextAlignmentOptions.MidlineLeft, Color.white);
+            var influenceLabel = CreateLabel(canvasGO.transform, "InfluenceLabel", "INFLUENCE",
+                new Vector2(135, -146), new Vector2(250, 34), 20, FontStyles.Normal, TextAlignmentOptions.MidlineLeft, Color.white);
 
             // Wire up ResourcePanel component
             var panel = canvasGO.AddComponent<ResourcePanel>();
-            panel.titleLabel      = titleGO;
-            panel.canvasGroup     = canvasGroup;
-            panel.energyLabel     = energyLabel;
-            panel.mineralsLabel   = mineralsLabel;
-            panel.foodLabel       = foodLabel;
-            panel.alloysLabel     = alloysLabel;
+            panel.titleLabel         = title;
+            panel.canvasGroup        = canvasGroup;
+            panel.energyLabel        = energyLabel;
+            panel.mineralsLabel      = mineralsLabel;
+            panel.foodLabel          = foodLabel;
+            panel.alloysLabel        = alloysLabel;
             panel.consumerGoodsLabel = goodsLabel;
-            panel.unityLabel      = unityLabel;
-            panel.influenceLabel  = influenceLabel;
-            panel.empireDateLabel = dateLabel;
-            panel.empireNameLabel = nameLabel;
+            panel.unityLabel         = unityLabel;
+            panel.influenceLabel     = influenceLabel;
+            panel.empireDateLabel    = dateLabel;
+            panel.empireNameLabel    = nameLabel;
 
             EditorUtility.SetDirty(canvasGO);
             Debug.Log("[StellarCommand] Resource Panel created.");
         }
 
-        private static TextMeshProUGUI CreateTMPLabel(Transform parent, string name, string text,
-            Vector2 anchoredPos, Vector2 size, float fontSize, FontStyles style = FontStyles.Normal)
+        private static TextMeshProUGUI CreateRow(Transform parent, string name, string text, float y)
         {
-            var go = new GameObject(name);
+            return CreateLabel(parent, name, text, new Vector2(0, y), new Vector2(520, 34), 21,
+                FontStyles.Normal, TextAlignmentOptions.MidlineLeft, Color.white);
+        }
+
+        private static void CreateLine(Transform parent, string name, float y)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
-            var rect = go.AddComponent<RectTransform>();
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchoredPosition = new Vector2(0, y);
+            rect.sizeDelta = new Vector2(520, 2);
+            var img = go.AddComponent<RawImage>();
+            img.color = LineColor;
+            img.raycastTarget = false;
+        }
+
+        private static TextMeshProUGUI CreateLabel(Transform parent, string name, string text,
+            Vector2 anchoredPos, Vector2 size, float fontSize, FontStyles style,
+            TextAlignmentOptions alignment, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rect = go.GetComponent<RectTransform>();
             rect.anchoredPosition = anchoredPos;
             rect.sizeDelta = size;
             var tmp = go.AddComponent<TextMeshProUGUI>();
             tmp.text = text;
             tmp.fontSize = fontSize;
             tmp.fontStyle = style;
-            tmp.alignment = TextAlignmentOptions.MidlineLeft;
-            tmp.color = Color.white;
+            tmp.alignment = alignment;
+            tmp.color = color;
+            tmp.raycastTarget = false;
             return tmp;
         }
     }

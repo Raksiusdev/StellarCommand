@@ -21,24 +21,38 @@ namespace StellarCommand.UI
         [Header("Animation")]
         public float pulseSpeed = 1.2f;
         public float pulseMinAlpha = 0.85f;
+        [Tooltip("Seconds for the scan-in wipe when the panel appears.")]
+        public float revealDuration = 0.9f;
 
         private Camera _mainCam;
         private float _timer;
+        private float _revealT;
         private bool _active;
+        private HologramSurface[] _surfaces;
 
         protected virtual void Awake()
         {
             _mainCam = Camera.main;
             if (canvasGroup == null) canvasGroup = GetComponent<CanvasGroup>();
             if (titleLabel != null) titleLabel.text = panelTitle;
+            _surfaces = GetComponentsInChildren<HologramSurface>(true);
         }
 
         protected virtual void OnEnable()
         {
-            // Start invisible, fade in after delay
+            // Start invisible, scan in after delay
             if (canvasGroup != null) canvasGroup.alpha = 0f;
             _active = false;
             _timer = 0f;
+            _revealT = 0f;
+            ApplyReveal(0f);
+        }
+
+        private void ApplyReveal(float t)
+        {
+            if (_surfaces == null) return;
+            foreach (var s in _surfaces)
+                if (s != null) s.SetReveal(t);
         }
 
         protected virtual void Update()
@@ -54,6 +68,13 @@ namespace StellarCommand.UI
                 return;
             }
 
+            // Scan-in wipe: surface reveals bottom to top, content fades in with it
+            if (_revealT < 1f)
+            {
+                _revealT = revealDuration <= 0f ? 1f : Mathf.Min(1f, _revealT + Time.deltaTime / revealDuration);
+                ApplyReveal(Mathf.SmoothStep(0f, 1f, _revealT));
+            }
+
             // Billboard: always face the camera
             if (faceCamera && _mainCam != null)
             {
@@ -67,13 +88,13 @@ namespace StellarCommand.UI
             if (canvasGroup != null)
             {
                 float pulse = Mathf.Sin(Time.time * pulseSpeed) * 0.5f + 0.5f;
-                canvasGroup.alpha = Mathf.Lerp(pulseMinAlpha, 1f, pulse);
+                canvasGroup.alpha = Mathf.Lerp(pulseMinAlpha, 1f, pulse) * Mathf.Clamp01(_revealT * 2f);
             }
         }
 
         protected virtual void OnPanelActivated()
         {
-            if (canvasGroup != null) canvasGroup.alpha = 1f;
+            // Alpha is driven from Update (pulse * reveal); nothing to do by default.
         }
 
         /// <summary>Called when new game state arrives. Override to refresh panel content.</summary>

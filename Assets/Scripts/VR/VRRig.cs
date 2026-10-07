@@ -23,7 +23,12 @@ namespace StellarCommand.VR
         [Tooltip("Height offset applied when playing in non-VR fallback mode.")]
         public float fallbackEyeHeight = 1.65f;
 
-        public bool IsVRActive => XRSettings.isDeviceActive;
+        // XRSettings.isDeviceActive is the legacy API and reports false under OpenXR,
+        // so ask the XR Management loader instead.
+        public bool IsVRActive =>
+            XRGeneralSettings.Instance != null &&
+            XRGeneralSettings.Instance.Manager != null &&
+            XRGeneralSettings.Instance.Manager.activeLoader != null;
 
         private void Awake()
         {
