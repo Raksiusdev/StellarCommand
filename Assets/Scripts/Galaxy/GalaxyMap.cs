@@ -18,16 +18,18 @@ namespace StellarCommand.Galaxy
 
         [Header("Layout")]
         [Tooltip("Radius of the hologram in metres.")]
-        public float radiusMeters = 0.38f;
+        public float radiusMeters = 0.5f;
         [Tooltip("Random vertical scatter (fraction of the radius) so the disc has some depth.")]
         public float depthScatter = 0.03f;
-        [Tooltip("Degrees per second the hologram turns. 0 = still.")]
-        public float spinDegreesPerSecond = 3f;
+        [Tooltip("Degrees per second the hologram turns by itself. 0 = still (rotate with the controllers).")]
+        public float spinDegreesPerSecond = 0f;
+        [Tooltip("Stars and lanes are faded out beyond this fraction of the radius, so zooming stays inside the table.")]
+        public float clipRadiusFraction = 1.0f;
 
         [Header("Star look")]
-        public float unownedSize = 0.0035f;
-        public float ownedSize = 0.0060f;
-        public float playerSize = 0.0095f;
+        public float unownedSize = 0.0042f;
+        public float ownedSize = 0.0070f;
+        public float playerSize = 0.0115f;
         public Color unownedColor = new Color(0.28f, 0.42f, 0.62f);
         public Color playerColor = new Color(0.25f, 0.95f, 1f);
 
@@ -38,11 +40,46 @@ namespace StellarCommand.Galaxy
 
         private Mesh _starMesh;
         private Mesh _laneMesh;
+        private MaterialPropertyBlock _clipBlock;
+        private GameState _state;
+        private readonly List<Vector3> _localPositions = new List<Vector3>();
+
+        public Transform Rotor => rotor;
+        public bool HasData => _state != null && _localPositions.Count > 0;
+        public int SystemCount => _localPositions.Count;
+        public StarSystem GetSystem(int index) => _state.Systems[index];
+        /// <summary>Star position in the rotor's local space (metres at zoom 1).</summary>
+        public Vector3 GetLocalPosition(int index) => _localPositions[index];
+
+        public string GetEmpireName(int ownerId)
+        {
+            if (ownerId < 0 || _state == null) return null;
+            return _state.EmpireNames.TryGetValue(ownerId, out string name) ? name : "Empire " + ownerId;
+        }
+
+        public bool IsPlayer(int ownerId) => _state != null && ownerId >= 0 && ownerId == _state.PlayerCountryId;
 
         private void Update()
         {
             if (rotor != null && spinDegreesPerSecond != 0f)
                 rotor.Rotate(0f, spinDegreesPerSecond * Time.deltaTime, 0f, Space.Self);
+
+            UpdateClip();
+        }
+
+        // Fades everything outside a cylinder around the map centre (in the map's own plane) so that
+        // zooming and panning never spill past the table.
+        private void UpdateClip()
+        {
+            if (_clipBlock == null) _clipBlock = new MaterialPropertyBlock();
+
+            _clipBlock.SetVector("_ClipCenter", transform.position);
+            _clipBlock.SetVector("_ClipNormal", transform.up);
+            _clipBlock.SetFloat("_ClipRadius", radiusMeters * clipRadiusFraction * Mathf.Abs(transform.lossyScale.x));
+            _clipBlock.SetFloat("_ClipHeight", radiusMeters * 0.6f * Mathf.Abs(transform.lossyScale.x));
+
+            if (starsFilter != null) starsFilter.GetComponent<MeshRenderer>().SetPropertyBlock(_clipBlock);
+            if (lanesFilter != null) lanesFilter.GetComponent<MeshRenderer>().SetPropertyBlock(_clipBlock);
         }
 
         public void Refresh(GameState state)
@@ -74,11 +111,15 @@ namespace StellarCommand.Galaxy
             }
             float scale = radiusMeters / maxR;
 
+            _state = state;
+            _localPositions.Clear();
             var positions = new Dictionary<int, Vector3>(systems.Count);
             foreach (var s in systems)
             {
                 float jitter = (Hash01(s.Id) - 0.5f) * 2f * depthScatter * radiusMeters;
-                positions[s.Id] = new Vector3((s.X - cx) * scale, jitter, (s.Y - cy) * scale);
+                var p = new Vector3((s.X - cx) * scale, jitter, (s.Y - cy) * scale);
+                positions[s.Id] = p;
+                _localPositions.Add(p); // same order as state.Systems, used for picking
             }
 
             BuildStars(systems, positions, state.PlayerCountryId);

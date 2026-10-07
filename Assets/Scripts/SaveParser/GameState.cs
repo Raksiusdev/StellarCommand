@@ -19,6 +19,9 @@ namespace StellarCommand.SaveParser
         /// <summary>Country id of the player's empire.</summary>
         public int PlayerCountryId { get; set; }
 
+        /// <summary>Readable name per country id that owns systems (best effort, see StellarisSaveReader).</summary>
+        public Dictionary<int, string> EmpireNames { get; set; } = new Dictionary<int, string>();
+
         /// <summary>Non-fatal problem, e.g. data not found because the save format is unsupported.</summary>
         public string Warning { get; set; } = null;
     }

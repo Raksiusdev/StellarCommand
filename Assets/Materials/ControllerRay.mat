@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: GalaxyLanes
+  m_Name: ControllerRay
   m_Shader: {fileID: 4800000, guid: 76cb331ceba12d34a81cf419f49be827, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -27,7 +27,7 @@ Material:
     m_Floats:
     - _ClipHeight: 100000
     - _ClipRadius: 100000
-    - _Intensity: 1.6
+    - _Intensity: 1.4
     m_Colors:
     - _ClipCenter: {r: 0, g: 0, b: 0, a: 0}
     - _ClipNormal: {r: 0, g: 1, b: 0, a: 0}

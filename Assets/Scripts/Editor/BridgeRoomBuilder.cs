@@ -9,7 +9,8 @@ namespace StellarCommand.Editor
     /// Layout (player at the origin looking down +Z):
     ///   rear half  - solid wall with light strips
     ///   front half - open viewport: low sill, pillars and a lintel, looking out into space
-    ///   centre     - curved console in front of the player, holographic panels float above it
+    ///   centre     - round holo table in front of the player with the galaxy map above it;
+    ///                holographic data panels sit to the sides
     /// Re-running the menu rebuilds everything from scratch.
     /// </summary>
     public static class BridgeRoomBuilder
@@ -42,7 +43,7 @@ namespace StellarCommand.Editor
 
             BuildShell();
             BuildWalls();
-            BuildConsole();
+            BuildTable();
             BuildSpaceScenery();
 
             // Fixed exposure + bloom; without it HDRP auto-exposure pumps the image as the head turns
@@ -198,19 +199,35 @@ namespace StellarCommand.Editor
             }
         }
 
-        private static void BuildConsole()
-        {
-            const float consoleRadius = 1.5f;
-            float width = SlotWidthDegrees(consoleRadius, SlotAngle) * 1.03f;
+        /// <summary>Centre of the round holo table in front of the player. The galaxy map hovers above it.</summary>
+        public static readonly Vector3 TableCenter = new Vector3(0f, 0f, 1.6f);
+        public const float TableRadius = 0.72f;
+        public const float TableTopY = 0.9f;
 
-            for (float a = -60f; a <= 60.01f; a += SlotAngle)
+        private static void BuildTable()
+        {
+            // Pedestal and top slab
+            Make(PrimitiveType.Cylinder, "TablePedestal", TableCenter + new Vector3(0, 0.42f, 0), Quaternion.identity,
+                new Vector3(0.5f, 0.42f, 0.5f), _hull);
+            Make(PrimitiveType.Cylinder, "TableTop", TableCenter + new Vector3(0, TableTopY - 0.06f, 0), Quaternion.identity,
+                new Vector3(TableRadius * 2f, 0.06f, TableRadius * 2f), _trim);
+
+            // Projector lens at the centre of the table
+            Make(PrimitiveType.Cylinder, "TableLens", TableCenter + new Vector3(0, TableTopY + 0.005f, 0), Quaternion.identity,
+                new Vector3(0.2f, 0.006f, 0.2f), _strip);
+
+            // Light rings: table rim, an inner guide ring, and a halo on the floor
+            const int segments = 36;
+            const float step = 360f / segments;
+            for (int i = 0; i < segments; i++)
             {
-                Make(PrimitiveType.Cube, "ConsoleBody", RadialPoint(consoleRadius + 0.25f, 0.45f, a), Tangent(a),
-                    new Vector3(width, 0.9f, 0.5f), _hull);
-                Make(PrimitiveType.Cube, "ConsoleTopStrip", RadialPoint(consoleRadius + 0.01f, 0.91f, a), Tangent(a),
-                    new Vector3(width * 0.96f, 0.03f, 0.04f), _strip);
-                Make(PrimitiveType.Cube, "ConsoleBaseStrip", RadialPoint(consoleRadius - 0.005f, 0.05f, a), Tangent(a),
-                    new Vector3(width * 0.96f, 0.04f, 0.03f), _strip);
+                float a = i * step;
+                Make(PrimitiveType.Cube, "TableRim", TableCenter + RadialPoint(TableRadius - 0.01f, TableTopY - 0.06f, a), Tangent(a),
+                    new Vector3(SlotWidthDegrees(TableRadius, step) * 1.03f, 0.03f, 0.03f), _strip);
+                Make(PrimitiveType.Cube, "TableInnerRing", TableCenter + RadialPoint(0.54f, TableTopY + 0.004f, a), Tangent(a),
+                    new Vector3(SlotWidthDegrees(0.54f, step) * 0.95f, 0.006f, 0.02f), _strip);
+                Make(PrimitiveType.Cube, "TableFloorRing", TableCenter + RadialPoint(1.0f, 0.007f, a), Tangent(a),
+                    new Vector3(SlotWidthDegrees(1.0f, step) * 0.95f, 0.012f, 0.04f), _strip);
             }
         }
 

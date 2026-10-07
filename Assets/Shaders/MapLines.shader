@@ -5,6 +5,12 @@ Shader "StellarCommand/MapLines"
     Properties
     {
         _Intensity ("HDR Intensity", Range(0, 8)) = 1.5
+        // Set per frame by GalaxyMap: lines fade out beyond this cylinder (world space).
+        // Defaults are huge, so objects that never set them (controller rays) are unaffected.
+        _ClipCenter ("Clip Centre", Vector) = (0, 0, 0, 0)
+        _ClipNormal ("Clip Plane Normal", Vector) = (0, 1, 0, 0)
+        _ClipRadius ("Clip Radius", Float) = 100000
+        _ClipHeight ("Clip Half Height", Float) = 100000
     }
 
     SubShader
@@ -41,6 +47,19 @@ Shader "StellarCommand/MapLines"
             };
 
             float _Intensity;
+            float4 _ClipCenter, _ClipNormal;
+            float _ClipRadius, _ClipHeight;
+
+            float ClipFactor(float3 worldPos)
+            {
+                float3 n = normalize(_ClipNormal.xyz);
+                float3 d = worldPos - _ClipCenter.xyz;
+                float height = dot(d, n);
+                float radial = length(d - n * height);
+                float edge = 1.0 - smoothstep(_ClipRadius * 0.9, _ClipRadius, radial);
+                float cap = 1.0 - smoothstep(_ClipHeight * 0.8, _ClipHeight, abs(height));
+                return edge * cap;
+            }
 
             v2f vert(appdata v)
             {
@@ -49,7 +68,7 @@ Shader "StellarCommand/MapLines"
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 o.pos = UnityObjectToClipPos(v.vertex);
-                o.color = v.color.rgb;
+                o.color = v.color.rgb * ClipFactor(mul(unity_ObjectToWorld, float4(v.vertex.xyz, 1.0)).xyz);
                 return o;
             }
 

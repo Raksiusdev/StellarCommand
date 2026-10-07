@@ -9,6 +9,11 @@ Shader "StellarCommand/MapStar"
     Properties
     {
         _Intensity ("HDR Intensity", Range(0, 12)) = 3
+        // Set per frame by GalaxyMap: stars fade out beyond this cylinder (world space)
+        _ClipCenter ("Clip Centre", Vector) = (0, 0, 0, 0)
+        _ClipNormal ("Clip Plane Normal", Vector) = (0, 1, 0, 0)
+        _ClipRadius ("Clip Radius", Float) = 1000
+        _ClipHeight ("Clip Half Height", Float) = 1000
     }
 
     SubShader
@@ -48,6 +53,20 @@ Shader "StellarCommand/MapStar"
             };
 
             float _Intensity;
+            float4 _ClipCenter, _ClipNormal;
+            float _ClipRadius, _ClipHeight;
+
+            // 1 inside the clip cylinder, fading to 0 at its edge and above/below it
+            float ClipFactor(float3 worldPos)
+            {
+                float3 n = normalize(_ClipNormal.xyz);
+                float3 d = worldPos - _ClipCenter.xyz;
+                float height = dot(d, n);
+                float radial = length(d - n * height);
+                float edge = 1.0 - smoothstep(_ClipRadius * 0.9, _ClipRadius, radial);
+                float cap = 1.0 - smoothstep(_ClipHeight * 0.8, _ClipHeight, abs(height));
+                return edge * cap;
+            }
 
             v2f vert(appdata v)
             {
@@ -62,7 +81,7 @@ Shader "StellarCommand/MapStar"
                 float4 viewPos = mul(UNITY_MATRIX_MV, float4(v.vertex.xyz, 1.0));
                 viewPos.xy += v.uv * v.size.x * objScale;
                 o.pos = mul(UNITY_MATRIX_P, viewPos);
-                o.color = v.color.rgb;
+                o.color = v.color.rgb * ClipFactor(mul(unity_ObjectToWorld, float4(v.vertex.xyz, 1.0)).xyz);
                 o.uv = v.uv;
                 return o;
             }

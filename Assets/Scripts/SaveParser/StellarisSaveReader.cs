@@ -214,14 +214,39 @@ namespace StellarCommand.SaveParser
                         ownerBySystem[systemId] = owner;
             });
 
+            var owners = new HashSet<int>();
             foreach (var system in state.Systems)
             {
                 if (ownerBySystem.TryGetValue(system.Id, out int owner))
                 {
                     system.OwnerId = owner;
                     system.IsPlayerOwned = owner == state.PlayerCountryId;
+                    owners.Add(owner);
                 }
             }
+
+            ReadEmpireNames(text, owners, state);
+        }
+
+        /// <summary>
+        /// One pass over the country section reading only the head of each owning country, where the
+        /// name block lives. Names are localisation templates, so we get the species adjective
+        /// ("Sutharian") rather than the full display name; good enough for labels.
+        /// </summary>
+        private static void ReadEmpireNames(string text, HashSet<int> owners, GameState state)
+        {
+            if (owners.Count == 0) return;
+
+            ForEachEntry(text, "country", (id, start, end) =>
+            {
+                if (!int.TryParse(id, out int countryId) || !owners.Contains(countryId)) return;
+                int length = Math.Min(end - start, 6000);
+                var head = PdxScriptParser.Parse(text.Substring(start, length));
+                state.EmpireNames[countryId] = ResolveName(head.GetChild("name"), "Empire " + countryId);
+            });
+
+            // The player's empire has a proper name in the save header
+            state.EmpireNames[state.PlayerCountryId] = state.PlayerEmpireName;
         }
 
         // ---------------------------------------------------------------- names
