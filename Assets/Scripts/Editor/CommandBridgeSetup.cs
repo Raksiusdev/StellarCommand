@@ -45,17 +45,25 @@ namespace StellarCommand.Editor
         private static void CreateResourcePanel(Transform parent)
         {
             // Canvas (World Space)
+            // Recreate from scratch so re-running the menu fixes a broken panel
+            var existing = parent.Find("Resource Panel");
+            if (existing != null) Object.DestroyImmediate(existing.gameObject);
+
             var canvasGO = new GameObject("Resource Panel");
+            canvasGO.layer = 0; // Default
             canvasGO.transform.SetParent(parent, false);
-            canvasGO.transform.localPosition = Vector3.zero;
-            canvasGO.transform.localScale = Vector3.one * 0.002f; // scale for world space
 
             var canvas = canvasGO.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.worldCamera = Camera.main;
 
+            // Adding the Canvas swaps Transform for RectTransform and resets it,
+            // so size/scale/pivot must be set AFTER it exists.
             var rectTransform = canvasGO.GetComponent<RectTransform>();
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
             rectTransform.sizeDelta = new Vector2(600, 400);
+            rectTransform.localPosition = Vector3.zero;
+            rectTransform.localScale = Vector3.one * 0.002f; // 600px -> 1.2m wide
 
             canvasGO.AddComponent<UnityEngine.UI.CanvasScaler>();
             canvasGO.AddComponent<UnityEngine.UI.GraphicRaycaster>();
