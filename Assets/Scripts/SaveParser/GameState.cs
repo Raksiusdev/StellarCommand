@@ -16,6 +16,9 @@ namespace StellarCommand.SaveParser
         /// <summary>Game version string from the save, e.g. "Pegasus v4.4.6".</summary>
         public string GameVersion { get; set; } = "";
 
+        /// <summary>Country id of the player's empire.</summary>
+        public int PlayerCountryId { get; set; }
+
         /// <summary>Non-fatal problem, e.g. data not found because the save format is unsupported.</summary>
         public string Warning { get; set; } = null;
     }
@@ -53,6 +56,12 @@ namespace StellarCommand.SaveParser
         public int Id { get; set; }
         public float X { get; set; }
         public float Y { get; set; }
+        /// <summary>Vertical offset in galaxy units (Stellaris stores a small height per system).</summary>
+        public float Height { get; set; }
+        /// <summary>Star class key such as "sc_f".</summary>
+        public string StarClass { get; set; } = "";
+        /// <summary>Country id that owns the sector this system belongs to, or -1 when unowned.</summary>
+        public int OwnerId { get; set; } = -1;
         public bool IsPlayerOwned { get; set; }
         public bool IsColonized { get; set; }
         public string HyperlaneTargets { get; set; }

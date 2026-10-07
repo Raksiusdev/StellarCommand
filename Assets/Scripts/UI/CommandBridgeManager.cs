@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using StellarCommand.SaveParser;
+using StellarCommand.Galaxy;
 
 namespace StellarCommand.UI
 {
@@ -15,6 +16,9 @@ namespace StellarCommand.UI
 
         [Header("Panels")]
         public List<HolographicPanel> panels = new List<HolographicPanel>();
+
+        [Header("Galaxy")]
+        public GalaxyMap galaxyMap;
 
         private void OnEnable()
         {
@@ -41,6 +45,8 @@ namespace StellarCommand.UI
             {
                 if (panel != null) panel.Refresh(state);
             }
+
+            if (galaxyMap != null) galaxyMap.Refresh(state);
         }
 
         // Called from a UI button or voice command to force reload

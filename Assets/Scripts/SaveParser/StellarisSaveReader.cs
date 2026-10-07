@@ -64,7 +64,9 @@ namespace StellarCommand.SaveParser
                 state.Fleets = ParseOwnedFleets(text, countryNode);
             }
 
+            state.PlayerCountryId = playerCountryId;
             state.Systems = ParseSystems(text);
+            ApplySystemOwners(text, state);
             state.IsValid = true;
             return state;
         }
@@ -187,10 +189,39 @@ namespace StellarCommand.SaveParser
                     Name = ResolveName(node.GetChild("name"), "System"),
                     X = coord?.GetFloat("x") ?? 0f,
                     Y = coord?.GetFloat("y") ?? 0f,
+                    Height = coord?.GetFloat("visual_height") ?? 0f,
+                    StarClass = node.GetValue("star_class"),
                     HyperlaneTargets = string.Join(",", targets),
                 });
             });
             return systems;
+        }
+
+        /// <summary>
+        /// Ownership comes from sectors: each sector lists its systems and the country that owns it.
+        /// </summary>
+        private static void ApplySystemOwners(string text, GameState state)
+        {
+            var ownerBySystem = new System.Collections.Generic.Dictionary<int, int>();
+            ForEachEntry(text, "sectors", (id, start, end) =>
+            {
+                var node = PdxScriptParser.Parse(text.Substring(start, end - start));
+                if (!int.TryParse(node.GetValue("owner"), out int owner)) return;
+                var list = node.GetChild("systems");
+                if (list == null) return;
+                foreach (var entry in list.Children)
+                    if (int.TryParse(entry.Value, out int systemId))
+                        ownerBySystem[systemId] = owner;
+            });
+
+            foreach (var system in state.Systems)
+            {
+                if (ownerBySystem.TryGetValue(system.Id, out int owner))
+                {
+                    system.OwnerId = owner;
+                    system.IsPlayerOwned = owner == state.PlayerCountryId;
+                }
+            }
         }
 
         // ---------------------------------------------------------------- names
