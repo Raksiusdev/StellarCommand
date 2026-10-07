@@ -27,11 +27,18 @@ namespace StellarCommand.UI
 
         public override void Refresh(SaveParser.GameState state)
         {
-            if (state == null || !state.IsValid) return;
+            if (state == null) return;
+
+            if (!state.IsValid)
+            {
+                SetLabel(empireNameLabel, "SAVE ERROR");
+                SetLabel(empireDateLabel, state.ParseError ?? "");
+                return;
+            }
 
             var r = state.Resources;
             SetLabel(empireNameLabel, state.PlayerEmpireName.ToUpper());
-            SetLabel(empireDateLabel, state.Date);
+            SetLabel(empireDateLabel, string.IsNullOrEmpty(state.Warning) ? state.Date : "UNSUPPORTED SAVE VERSION");
             SetLabel(energyLabel, FormatResource("ENERGY", r.Energy, r.EnergyIncome));
             SetLabel(mineralsLabel, FormatResource("MINERALS", r.Minerals, r.MineralsIncome));
             SetLabel(foodLabel, FormatResource("FOOD", r.Food, r.FoodIncome));

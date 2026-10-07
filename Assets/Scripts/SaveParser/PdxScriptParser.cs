@@ -72,6 +72,15 @@ namespace StellarCommand.SaveParser
 
                 if (c == '}') { pos++; return; }
 
+                // Anonymous block "{ ... }" (list items, variables, owned_fleets...). Its entries are
+                // merged into the parent; parsing recursively consumes the matching '}'.
+                if (c == '{')
+                {
+                    pos++;
+                    ParseBlock(text, ref pos, parent);
+                    continue;
+                }
+
                 string key = ReadToken(text, ref pos);
                 if (string.IsNullOrEmpty(key)) { pos++; continue; }
 

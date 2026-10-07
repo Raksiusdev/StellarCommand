@@ -12,6 +12,12 @@ namespace StellarCommand.SaveParser
         public List<string> ActiveAlerts { get; set; } = new List<string>();
         public bool IsValid { get; set; } = false;
         public string ParseError { get; set; } = null;
+
+        /// <summary>Game version string from the save, e.g. "Pegasus v4.4.6".</summary>
+        public string GameVersion { get; set; } = "";
+
+        /// <summary>Non-fatal problem, e.g. data not found because the save format is unsupported.</summary>
+        public string Warning { get; set; } = null;
     }
 
     public class EmpireResources
