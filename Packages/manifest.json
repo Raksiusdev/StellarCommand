@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "com.meta.xr.sdk.core": "207.0.0",
+    "com.hecomi.uwindowcapture": "https://github.com/hecomi/uWindowCapture.git#0412fe09e11d3720197707a935f8114cc2454639",
     "com.unity.ai.assistant": "2.20.0-pre.2",
     "com.unity.ai.inference": "2.6.1",
     "com.unity.burst": "1.8.17",
