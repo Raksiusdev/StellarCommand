@@ -63,6 +63,11 @@ namespace StellarCommand.Editor
             map.starsFilter = starsFilter;
             map.lanesFilter = lanesFilter;
 
+            // ---- reflection of the map in the glossy floor (follows the real map every frame)
+            var mapMirror = FloorReflectionRoot.CreateContainer("Map Mirror");
+            CreateMirror("Stars Mirror", mapMirror, starsFilter);
+            CreateMirror("Lanes Mirror", mapMirror, lanesFilter);
+
             // ---- controllers
             Transform trackingSpace = FindTrackingSpace();
             var right = CreateController("Right Controller", XRNode.RightHand, trackingSpace, rayMaterial, bodyMaterial);
@@ -75,7 +80,8 @@ namespace StellarCommand.Editor
             label.alignment = TextAlignmentOptions.Center;
             label.color = Color.white;
             label.richText = true;
-            label.rectTransform.sizeDelta = new Vector2(0.6f, 0.12f);
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.rectTransform.sizeDelta = new Vector2(16f, 4f); // same units as the font size
             labelGO.SetActive(false);
 
             var markerGO = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -183,6 +189,19 @@ namespace StellarCommand.Editor
         }
 
         // ------------------------------------------------------------------ helpers
+
+        private static void CreateMirror(string name, Transform parent, MeshFilter source)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.AddComponent<MeshFilter>();
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.lightProbeUsage = LightProbeUsage.Off;
+            renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            go.AddComponent<MirrorProxy>().source = source;
+        }
 
         private static MeshFilter CreateMeshObject(string name, Transform parent, Material material)
         {

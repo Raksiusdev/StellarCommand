@@ -1,5 +1,6 @@
 using TMPro;
 using UnityEngine;
+using StellarCommand.Game;
 using StellarCommand.SaveParser;
 using StellarCommand.VR;
 
@@ -21,6 +22,12 @@ namespace StellarCommand.Galaxy
         public XRControllerTracker leftHand;
         public TextMeshPro label;
         public Transform marker;
+
+        [Header("Label")]
+        [Tooltip("Overall size of the hover label. Lower = smaller text.")]
+        public float labelScale = 0.1f;
+        [Tooltip("Metres above the star where the label floats.")]
+        public float labelHeight = 0.05f;
 
         [Header("Picking")]
         [Tooltip("Cone half-angle around the ray: a star within this angle can be selected, so far stars are as easy as near ones.")]
@@ -51,6 +58,22 @@ namespace StellarCommand.Galaxy
 
         private Camera _camera;
 
+        private void Start()
+        {
+            ConfigureLabel();
+        }
+
+        // Done at runtime so it also fixes labels created by older builds of the scene.
+        // The rect is measured in the same units as the font size, so it has to be wide:
+        // a narrow rect makes TMP wrap the text letter by letter.
+        private void ConfigureLabel()
+        {
+            if (label == null) return;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.alignment = TextAlignmentOptions.Center;
+            label.rectTransform.sizeDelta = new Vector2(16f, 4f);
+        }
+
         private void Update()
         {
             if (map == null || map.Rotor == null) return;
@@ -60,9 +83,12 @@ namespace StellarCommand.Galaxy
             UpdateSticks();
             UpdateGrab();
 
-            if ((rightHand != null && rightHand.PrimaryButtonDown) || (leftHand != null && leftHand.PrimaryButtonDown))
+            if ((Free(rightHand) && rightHand.PrimaryButtonDown) || (Free(leftHand) && leftHand.PrimaryButtonDown))
                 ResetView();
         }
+
+        // A hand pointing at the game screen belongs to the game, not to the map
+        private static bool Free(XRControllerTracker hand) => hand != null && !GameScreenInput.Captures(hand);
 
         // ------------------------------------------------------------------ hover
 
@@ -74,7 +100,7 @@ namespace StellarCommand.Galaxy
 
             foreach (var hand in new[] { rightHand, leftHand })
             {
-                if (hand == null || !hand.IsTracked) continue;
+                if (hand == null || !hand.IsTracked || GameScreenInput.Captures(hand)) continue;
                 if (map.HasData && TryPick(hand, out int index, out float distance))
                 {
                     // Prefer the right hand when both point at something
@@ -200,9 +226,19 @@ namespace StellarCommand.Galaxy
 
             Transform t = label.transform;
             Vector3 up = _camera != null ? _camera.transform.up : Vector3.up;
-            t.position = world + up * 0.07f;
+            t.position = world + up * labelHeight;
             if (_camera != null)
+            {
                 t.rotation = Quaternion.LookRotation(t.position - _camera.transform.position, up);
+
+                // Keep the label about the same apparent size whether the star is near or far
+                float distance = Vector3.Distance(t.position, _camera.transform.position);
+                t.localScale = Vector3.one * (labelScale * Mathf.Clamp(distance / 1.5f, 0.7f, 1.6f));
+            }
+            else
+            {
+                t.localScale = Vector3.one * labelScale;
+            }
         }
 
         private void HideLabel()
@@ -236,9 +272,11 @@ namespace StellarCommand.Galaxy
             float dt = Time.deltaTime;
             Transform rotor = map.Rotor;
 
-            if (rightHand != null && rightHand.IsTracked)
+            if (Free(rightHand) && rightHand.IsTracked)
             {
-                Vector2 s = Deadzone(rightHand.Stick);
+                // Pushing the stick straight up always leaks a little sideways; keep only the dominant
+                // axis so zooming does not also turn the map (and turning does not zoom).
+                Vector2 s = DominantAxis(Deadzone(rightHand.Stick));
                 if (s.x != 0f)
                     rotor.Rotate(0f, (invertTurn ? -1f : 1f) * s.x * turnDegreesPerSecond * dt, 0f, Space.Self);
                 if (s.y != 0f)
@@ -251,7 +289,7 @@ namespace StellarCommand.Galaxy
                 }
             }
 
-            if (leftHand != null && leftHand.IsTracked)
+            if (Free(leftHand) && leftHand.IsTracked)
             {
                 Vector2 s = Deadzone(leftHand.Stick);
                 if (s != Vector2.zero)
@@ -277,6 +315,15 @@ namespace StellarCommand.Galaxy
             return v;
         }
 
+        // Keeps only the stronger axis unless the stick is clearly pushed diagonally
+        private static Vector2 DominantAxis(Vector2 v)
+        {
+            float x = Mathf.Abs(v.x), y = Mathf.Abs(v.y);
+            if (y > x * 1.6f) return new Vector2(0f, v.y);
+            if (x > y * 1.6f) return new Vector2(v.x, 0f);
+            return v;
+        }
+
         private void SetZoom(float zoom, Vector3? pivotWorld = null)
         {
             float old = _zoom;
@@ -284,21 +331,33 @@ namespace StellarCommand.Galaxy
             float ratio = _zoom / old;
             map.Rotor.localScale = Vector3.one * _zoom;
 
-            // Scaling happens around the rotor origin, so shift the origin to keep the pivot point fixed
-            if (pivotWorld.HasValue && !Mathf.Approximately(ratio, 1f))
+            if (Mathf.Approximately(ratio, 1f)) return;
+
+            if (ratio > 1f && pivotWorld.HasValue)
             {
+                // Zooming in: scaling happens around the rotor origin, so shift the origin to keep the
+                // pivot point (the selected star) fixed under the ray
                 Vector3 p = map.transform.InverseTransformPoint(pivotWorld.Value);
                 map.Rotor.localPosition = p - (p - map.Rotor.localPosition) * ratio;
-                ClampPan();
             }
+            else
+            {
+                // Zooming out: let the offset shrink with the zoom, so the map drifts back to the table
+                // centre instead of staying where the last zoom-in left it
+                map.Rotor.localPosition *= ratio;
+            }
+
+            // At normal zoom (or less) the whole galaxy fits on the table, so it is always centred
+            if (_zoom <= 1f) map.Rotor.localPosition = Vector3.zero;
+            ClampPan();
         }
 
         // ------------------------------------------------------------------ grab
 
         private void UpdateGrab()
         {
-            bool right = rightHand != null && rightHand.IsTracked && rightHand.GripHeld;
-            bool left = leftHand != null && leftHand.IsTracked && leftHand.GripHeld;
+            bool right = Free(rightHand) && rightHand.IsTracked && rightHand.GripHeld;
+            bool left = Free(leftHand) && leftHand.IsTracked && leftHand.GripHeld;
 
             if (right && left)
             {

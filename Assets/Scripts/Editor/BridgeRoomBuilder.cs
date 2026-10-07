@@ -27,8 +27,9 @@ namespace StellarCommand.Editor
         private static readonly Color TrimColor = new Color(0.08f, 0.11f, 0.15f);
         private static readonly Color Accent = new Color(0.20f, 0.85f, 1.00f);
 
-        private static Material _hull, _trim, _strip, _sky, _planet, _moon;
+        private static Material _hull, _trim, _strip, _floor, _sky, _planet, _moon;
         private static Transform _root;
+        private static Transform _mirrorRoot; // mirrored copies shown through the glossy floor
 
         [MenuItem("StellarCommand/Build Bridge Room")]
         public static void Build()
@@ -40,6 +41,7 @@ namespace StellarCommand.Editor
 
             _root = new GameObject(RootName).transform;
             _root.position = Vector3.zero;
+            _mirrorRoot = FloorReflectionRoot.CreateContainer("Room Mirror");
 
             BuildShell();
             BuildWalls();
@@ -60,10 +62,11 @@ namespace StellarCommand.Editor
             var surface = Shader.Find("StellarCommand/BridgeSurface");
             var skybox = Shader.Find("StellarCommand/SpaceSkybox");
             var planet = Shader.Find("StellarCommand/PlanetProcedural");
-            if (surface == null || skybox == null || planet == null)
+            var floor = Shader.Find("StellarCommand/BridgeFloor");
+            if (surface == null || skybox == null || planet == null || floor == null)
             {
                 Debug.LogError("[StellarCommand] A bridge shader was not found or failed to compile. " +
-                               "Check Assets/Shaders (BridgeSurface, SpaceSkybox, PlanetProcedural) for errors in the Console.");
+                               "Check Assets/Shaders (BridgeSurface, BridgeFloor, SpaceSkybox, PlanetProcedural) for errors in the Console.");
                 return false;
             }
 
@@ -88,6 +91,14 @@ namespace StellarCommand.Editor
                 m.SetColor("_AccentColor", Accent);
                 m.SetFloat("_Emission", 1f);
                 m.SetFloat("_EmissionIntensity", 3f);
+            });
+            _floor = EnsureMaterial("BridgeFloor", floor, m =>
+            {
+                m.SetColor("_AccentColor", Accent);
+                // Subtle: the mirror image should hint at the lights, not compete with them
+                m.SetFloat("_BaseAlpha", 0.95f);
+                m.SetFloat("_GrazingAlpha", 0.70f);
+                m.SetFloat("_FresnelPower", 4f);
             });
             _sky = EnsureMaterial("SpaceSkybox", skybox, m =>
             {
@@ -136,8 +147,9 @@ namespace StellarCommand.Editor
         private static void BuildShell()
         {
             float diameter = (Radius + 0.4f) * 2f;
+            // Glossy floor: reflects the mirrored copies made by Make() for light strips, table and pillars
             Make(PrimitiveType.Cylinder, "Floor", new Vector3(0, -0.05f, 0), Quaternion.identity,
-                new Vector3(diameter, 0.05f, diameter), _hull);
+                new Vector3(diameter, 0.05f, diameter), _floor);
             Make(PrimitiveType.Cylinder, "Ceiling", new Vector3(0, Height + 0.05f, 0), Quaternion.identity,
                 new Vector3(diameter, 0.05f, diameter), _hull);
 
@@ -284,7 +296,34 @@ namespace StellarCommand.Editor
             if (collider != null) Object.DestroyImmediate(collider);
 
             go.GetComponent<MeshRenderer>().sharedMaterial = material;
+
+            if (ReflectsInFloor(name, material)) MakeMirrorCopy(type, name, position, rotation, scale, material);
             return go;
+        }
+
+        // Light strips, the table and the pillars are what the eye expects to see in a polished floor.
+        // Plain hull plates are too dark to show a reflection, so they are skipped (saves draw calls).
+        private static bool ReflectsInFloor(string name, Material material) =>
+            material == _strip || name.StartsWith("Table") || name == "Pillar";
+
+        // The mirror root is scaled (1, -1, 1), so the same local pose lands exactly at the reflected position
+        private static void MakeMirrorCopy(PrimitiveType type, string name, Vector3 position, Quaternion rotation,
+            Vector3 scale, Material material)
+        {
+            var copy = GameObject.CreatePrimitive(type);
+            copy.name = name + " (mirror)";
+            copy.transform.SetParent(_mirrorRoot, false);
+            copy.transform.localPosition = position;
+            copy.transform.localRotation = rotation;
+            copy.transform.localScale = scale;
+
+            var collider = copy.GetComponent<Collider>();
+            if (collider != null) Object.DestroyImmediate(collider);
+
+            var renderer = copy.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
         }
     }
 }
